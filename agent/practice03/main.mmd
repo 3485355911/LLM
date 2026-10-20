@@ -1,0 +1,59 @@
+%% main.py 代码架构图
+%% 用法：把本文件粘贴到 https://mermaid.live 或支持 Mermaid 的 Markdown 预览器即可渲染
+
+flowchart TB
+    subgraph 入口与配置
+        A[main.py] --> B[configparser 加载 config.ini]
+        B --> C[cfg 字典<br>base_url / api_key / model_name]
+    end
+
+    subgraph 工具声明层
+        D[tools 列表]
+        D --> D1[getdate]
+        D --> D2[isLeapYear]
+        D --> D3[getChineseDate]
+    end
+
+    subgraph 工具实现层
+        direction TB
+        E1[getdate<br>subprocess → date /t & time /t]
+        E2[isLeapYear<br>year % 4 == 0<br>and % 100 != 0 or % 400 == 0]
+        E3[getChineseDate date=None]
+    end
+
+    subgraph 农历换算模块
+        direction TB
+        F[LUNAR_INFO 表<br>1900-2100 年]
+        F1[_leap_month y]
+        F2[_month_days y m]
+        F3[_leap_days y]
+        F4[_year_days y]
+        F5[_solar_to_lunar d<br>核心换算]
+        F --> F1 & F2 & F3 & F4
+        F1 & F2 & F3 & F4 --> F5
+    end
+
+    subgraph 运行时循环
+        G[messages 对话历史]
+        H[外层循环<br>input → 空行退出]
+        I[内层循环<br>requests.post<br>stream=True]
+        J[解析 SSE data: 行<br>累积 content / tool_calls]
+        K{有 tool_calls?}
+        L[逐条分发执行<br>getdate / isLeapYear / getChineseDate]
+        M[messages.append<br>role=tool]
+        N[messages.append<br>role=assistant]
+    end
+
+    C & D --> I
+    D1 -- 映射 --> E1
+    D2 -- 映射 --> E2
+    D3 -- 映射 --> E3
+    E3 --> F5
+    E1 & E2 & E3 --> L
+
+    H --> I
+    G --> I
+    I --> J
+    J --> K
+    K -- 是 --> L --> M --> I
+    K -- 否 --> N --> H
