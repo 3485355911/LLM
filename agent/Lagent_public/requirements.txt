@@ -1,0 +1,4 @@
+textual>=8.0
+httpx>=0.27
+trafilatura>=1.9
+mcp>=1.0
