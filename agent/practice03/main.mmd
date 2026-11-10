@@ -1,0 +1,74 @@
+%% main.py 代码架构图（基于当前代码）
+%% 用法：把本文件粘贴到 https://mermaid.live 或支持 Mermaid 的 Markdown 预览器即可渲染
+
+flowchart TB
+    subgraph 入口与配置["① 入口与配置"]
+        A[main.py] --> B["configparser 读取 config.ini"]
+        B --> C["cfg 字典<br/>base_url / api_key / model_name"]
+    end
+
+    subgraph 工具声明层["② 工具声明层（OpenAI tools schema）"]
+        D["tools 列表（10 个工具）"]
+        D --> D1[getCwd]
+        D --> D2[listDir]
+        D --> D3[getFileType]
+        D --> D4[readFile]
+        D --> D5[createFile]
+        D --> D6[writeFile]
+        D --> D7[createDir]
+        D --> D8[removeDir]
+        D --> D9[removeFile]
+        D --> D10[renamePath]
+    end
+
+    subgraph 工具实现层["③ 工具实现层（pathlib / os / shutil）"]
+        direction TB
+        E1["getCwd()<br/>os.getcwd()"]
+        E2["listDir(dir)<br/>Path.iterdir + 排序"]
+        E3["getFileType(path)<br/>后缀分类 + stat 大小"]
+        E4["readFile(path)<br/>UTF-8/GBK 兜底 + 5w 字符截断"]
+        E5["createFile(dir,name,content)<br/>mkdir + touch / write_text"]
+        E6["writeFile(path,content)<br/>父目录 mkdir + write_text"]
+        E7["createDir(path)<br/>mkdir(parents=True)"]
+        E8["removeDir(path)<br/>shutil.rmtree"]
+        E9["removeFile(path)<br/>Path.unlink"]
+        E10["renamePath(old,new)<br/>Path.rename"]
+    end
+
+    subgraph 分发层["④ 分发层"]
+        MAP["TOOL_MAP<br/>工具名 → lambda 参数适配"]
+    end
+
+    subgraph 运行时循环["⑤ 运行时循环（交互式 Agent）"]
+        G["messages 对话历史"]
+        H["外层循环<br/>input → 空行退出"]
+        I["内层循环<br/>requests.post /chat/completions<br/>stream=True"]
+        J["解析 SSE data: 行<br/>累积 content / tool_calls"]
+        K{"有 tool_calls?"}
+        L["逐条分发执行<br/>func = TOOL_MAP[name]"]
+        M["messages.append role=tool<br/>（回填工具结果）"]
+        N["messages.append role=assistant<br/>（无工具，结束本轮）"]
+    end
+
+    C --> I
+    D1 -.映射.-> E1
+    D2 -.映射.-> E2
+    D3 -.映射.-> E3
+    D4 -.映射.-> E4
+    D5 -.映射.-> E5
+    D6 -.映射.-> E6
+    D7 -.映射.-> E7
+    D8 -.映射.-> E8
+    D9 -.映射.-> E9
+    D10 -.映射.-> E10
+
+    E1 & E2 & E3 & E4 & E5 & E6 & E7 & E8 & E9 & E10 --> MAP
+
+    H --> I
+    G --> I
+    D --> I
+    I --> J
+    J --> K
+    K -- 是 --> L --> MAP
+    MAP --> M --> I
+    K -- 否 --> N --> H
